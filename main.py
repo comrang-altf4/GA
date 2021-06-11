@@ -3,10 +3,9 @@ import random
 import imutils
 from scipy import spatial
 import scipy.sparse
-import numpy as np
 n = 3  # size of individual (chromosome)
-m = 100  # size of population
-n_generations = 10 # number of generations
+m = 150  # size of population
+n_generations = 8 # number of generations
 fitnesses = []
 def crop_img(individual,rotated):
     h = int(rotated.shape[0] / 2)
@@ -29,7 +28,7 @@ def compute_fitness(individual):
     if 255 not in sA[0]:
         ttt=1
     else:
-        ttt = spatial.distance.(sA, sB)
+        ttt = spatial.distance.correlation(sA, sB)
     return 1-ttt
 def create_individual():
     return ([random.randint(int(h_max/2), src.shape[0]-int(h_max)),random.randint(int(w_max/2) , src.shape[1]-int(w_max)),random.randint(0, 360)])
@@ -89,24 +88,30 @@ def remove(crop,rotated):
         for j in range(crop.shape[1]):
             if crop[i,j]==rotated[i,j] and crop[i,j]!=0:
                 crop[i,j]=0
+            elif crop[i,j]!=rotated[i,j] and crop[i,j]==1:
+                crop[i,j]=1
     src2[individual[0] - h:individual[0] + h + t_h, individual[1] - w:individual[1] + w + t_w]=crop
     return 0
 def bfs(x,y,mode):
     bfs_coord=[[x,y]]
     l=0
-    bfs_bool_arr=[[True for i in range(src.shape[0])] for j in range(src.shape[1])]
+    bfs_bool_arr=[[True for i in range(src2.shape[1])] for j in range(src2.shape[0])]
     temp=src2[x,y]
     bfs_bool_arr[x][y]=False
+    sum_pix=0
     if temp!=0 and mode==0:
         return x,y
     while l<=len(bfs_coord)-1:
         x,y=bfs_coord[l]
-        for skamtt in range(6):
+        aaa=[1,6,13]
+        for skamtt in aaa:
             skamt=skamtt+1
-            if bfs_bool_arr[x+skamt][y]==True:
+            if x+skamt in range(src2.shape[0]) and bfs_bool_arr[x+skamt][y]==True:
                 if src2[x+skamt,y]!=0:
                     if mode==0:
-                        return x+skamt,y
+                        bfs_coord.append([x + skamt, y])
+                        sum_pix+=1
+                        #return x+skamt,y
                     else:
                         src2[x+skamt,y]=0
                         bfs_coord.append([x + skamt, y])
@@ -114,10 +119,12 @@ def bfs(x,y,mode):
                     if mode==0:
                         bfs_coord.append([x + skamt, y])
                 bfs_bool_arr[x + skamt][y]=False
-            if bfs_bool_arr[x-skamt][y]==True:
+            if  x-skamt in range(src2.shape[0])and bfs_bool_arr[x-skamt][y]==True:
                 if src2[x - skamt, y] != 0:
                     if mode == 0:
-                        return x - skamt, y
+                        bfs_coord.append([x - skamt, y])
+                        sum_pix += 1
+                        #return x - skamt, y
                     else:
                         src2[x - skamt, y] = 0
                         bfs_coord.append([x - skamt, y])
@@ -125,10 +132,12 @@ def bfs(x,y,mode):
                     if mode == 0:
                         bfs_coord.append([x - skamt, y])
                 bfs_bool_arr[x - skamt][y] = False
-            if bfs_bool_arr[x][y+skamt]==True:
+            if  y+skamt in range(src2.shape[1]) and bfs_bool_arr[x][y+skamt]==True :
                 if src2[x, y+1] != 0:
                     if mode == 0:
-                        return x, y+skamt
+                        bfs_coord.append([x, y+skamt])
+                        sum_pix += 1
+                        #return x, y+skamt
                     else:
                         src2[x , y+ 1] = 0
                         bfs_coord.append([x , y+ skamt])
@@ -136,10 +145,12 @@ def bfs(x,y,mode):
                     if mode == 0:
                         bfs_coord.append([x , y+ skamt])
                 bfs_bool_arr[x][y + skamt] = False
-            if bfs_bool_arr[x][y-skamt]==True:
+            if y-skamt in range(src2.shape[1])and bfs_bool_arr[x][y-skamt]==True:
                 if src2[x , y-skamt] != 0:
                     if mode == 0:
-                        return x, y-skamt
+                        bfs_coord.append([x, y - skamt])
+                        sum_pix += 1
+                        #return x, y-skamt
                     else:
                         src2[x , y-skamt] = 0
                         bfs_coord.append([x, y-skamt])
@@ -147,6 +158,10 @@ def bfs(x,y,mode):
                     if mode == 0:
                         bfs_coord.append([x , y-skamt])
                 bfs_bool_arr[x ][y-skamt] = False
+            if mode==1 and len(bfs_coord)>=37887:
+                return 0
+            if mode==0 and sum_pix>=50:
+                return bfs_coord[-1]
         l+=1
 def remove2(individual,rotated):
     h = int(rotated.shape[0] / 2)
@@ -161,9 +176,9 @@ def remove2(individual,rotated):
     y_t=individual[1]+int(w/2)+t_w
     print(x_t,y_t)
     x_t,y_t=bfs(x_t,y_t,0)
-    print(src2[x_t,y_t])
     print(x_t,y_t)
     bfs(x_t,y_t,1)
+    cv2.rectangle(src2, (y_t-10,x_t-10), (y_t+10,x_t+10), (200, 0, 0), 3)
 def create_new_population(old_population, elitism=2, gen=1):
     sorted_population = sorted(old_population, key=compute_fitness)
 
@@ -204,7 +219,7 @@ src=cv2.imread("template2.jpg",0)
 borderType = cv2.BORDER_CONSTANT
 src = cv2.copyMakeBorder(src, h_max, h_max, w_max, w_max, borderType, None, 0)
 src2 = src
-ret, src2 = cv2.threshold(src2, 127, 255, cv2.THRESH_BINARY)
+ret, src2 = cv2.threshold(src2, 120, 255, cv2.THRESH_BINARY)
 geni=0
 for k in range(13):
     population = [create_individual() for _ in range(m)]
@@ -213,7 +228,7 @@ for k in range(13):
         if i[0]+h_max>src.shape[0] or i[1]+w_max>src.shape[1]:
             print(i)
     geni=0
-    while geni<n_generations or compute_fitness(population[m-1])<0.5:
+    while geni<n_generations: #or compute_fitness(population[m-1])<0.5:
         population = create_new_population(population, 2, geni)
         geni+=1
         if geni>n_generations+40:
@@ -224,11 +239,10 @@ for k in range(13):
     ret,rotated = cv2.threshold(rotated, 127, 255, cv2.THRESH_BINARY)
     crop = crop_img(individual,rotated)
     ret,crop=cv2.threshold(crop, 127, 255, cv2.THRESH_BINARY)
-    # cv2.imshow('b',rotated)
     #remove(crop,rotated)
     remove2(individual,rotated)
     #cv2.rectangle(src, (individual[1]-int(crop.shape[1]/2),individual[0]-int(crop.shape[0]/2)), (individual[1] + int(crop.shape[1]/2),individual[0]+int(crop.shape[0]/2)), (200, 0, 0), 3)
-    cv2.imwrite("found{}.jpg".format(k),src2)
+    cv2.imwrite("found{}.jpg".format(k+1),src2)
     print("{} iteration".format(k+1))
     # cv2.imshow('a', crop)
     # cv2.waitKey()
